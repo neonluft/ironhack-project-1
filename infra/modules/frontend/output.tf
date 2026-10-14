@@ -1,4 +1,7 @@
-output "public_ip_frontend" {
-  description = "the public IP adress of the frontend ec2 instance"
-  value = aws_instance.ec2_frontend.private_ip
+output "frontend" {
+  description = "all the needed information for frontend - for the ansible file"
+  value = {
+    public_ip = aws_instance.ec2_frontend.public_ip
+    hostname = aws_instance.ec2_frontend.tags.Name
+  }
 }

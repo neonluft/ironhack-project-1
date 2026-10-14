@@ -1,0 +1,37 @@
+---
+- name: DB Setup 
+  hosts: db
+  become: true
+  tasks: 
+    - name: Update apt package index
+      ansible.builtin.apt:
+        update_cache: yes
+    
+    - name: Install Docker if not present
+      ansible.builtin.package:
+        name: docker.io
+        state: present
+
+    - name: Pull Docker Image
+      docker_image:
+        name: postgres:15-alpine
+        source: pull
+        tag: latest
+
+    - name: Create Volume
+      community.docker.docker_volume: 
+        name: "db-volume"
+        state: present
+
+    - name: Run Container
+      docker_container:
+        name: DB
+        image: postgres:15-alpine
+        ports: 
+        - "5432:5432"
+        state: started
+        volumes: 
+          - "db-data:/var/lib/postgresql/data"
+        env: 
+          POSTGRES_USER: "postgres"
+          POSTGRES_PASSWORD: "postgres"

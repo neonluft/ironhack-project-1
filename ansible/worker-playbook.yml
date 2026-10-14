@@ -1,0 +1,57 @@
+---
+- name: Worker App Setup 
+  hosts: backend
+  become: true
+  tasks: 
+
+    - name: Update apt package index
+      ansible.builtin.apt:
+        update_cache: yes
+    
+    - name: Install Docker if not present
+      ansible.builtin.package:
+        name: docker.io
+        state: present
+
+    - name: Create Network
+      community.docker.docker_network:
+        name: worker-net
+        state: present 
+
+    - name: Pull Redis Image
+      docker_image: 
+        name: redis:alpine
+        source: pull
+        tag: latest
+
+    - name: Run Redis Container
+      docker_container:
+        name: redis
+        image: redis:alpine
+        ports: 
+        - "6379:6379"
+        state: started
+        networks:
+          - name: worker-net
+
+    - name: Pull Docker Image
+      docker_image:
+        name: neonluft/worker-app
+        source: pull
+        tag: latest
+
+    - name: Run Container
+      docker_container:
+        name: worker-app
+        image: neonluft/worker-app:latest # Change!
+        #ports:
+        #- "6379:6379" # port mappings
+        state: started
+        networks:
+          - name: worker-net
+        env: 
+          DB_HOST: "{{ hostvars['florik-backend-db'].private_ip }}"
+
+
+        
+ 

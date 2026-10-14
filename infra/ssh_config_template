@@ -1,0 +1,16 @@
+Host florik-frontend
+  HostName ${frontend_public_ip}
+  User ubuntu
+  IdentityFile ~/floriksep26.pem
+
+Host florik-backend
+  HostName ${backend_private_ip}
+  User ubuntu
+  ProxyJump florik-frontend
+  IdentityFile ~/floriksep26.pem
+
+Host florik-backend-db
+  HostName ${db_private_ip}
+  User ubuntu
+  ProxyJump florik-frontend
+  IdentityFile ~/floriksep26.pem

@@ -133,7 +133,7 @@ resource "aws_security_group" "frontend_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["2.214.191.54/32"]
+    cidr_blocks = [local.my_ip_cidr]
   }
 
   ingress {
@@ -141,13 +141,29 @@ resource "aws_security_group" "frontend_sg" {
     from_port   = -1
     to_port     = -1
     protocol    = "icmp"
-    cidr_blocks = ["2.214.191.54/32"]
+    cidr_blocks = [local.my_ip_cidr]
   }
 
   ingress {
     description = "HTTP from anywhere"
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTP 8080 from anywhere"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTP 8080 from anywhere"
+    from_port   = 8081
+    to_port     = 8081
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -185,12 +201,36 @@ resource "aws_vpc_security_group_ingress_rule" "backend_from_frontend" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "backend_from_frontend_ssh" {
+  security_group_id            = aws_security_group.backend_sg.id
+  referenced_security_group_id = aws_security_group.frontend_sg.id
+  from_port                    = 22
+  to_port                      = 22
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_egress_rule" "backend_to_backend_db" {
-  security_group_id = aws_security_group.backend_sg.id
+  security_group_id            = aws_security_group.backend_sg.id
   referenced_security_group_id = aws_security_group.backend_db_sg.id
-  from_port         = 5432
-  to_port           = 5432
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "backend_http_traffic_out" {
+  security_group_id = aws_security_group.backend_sg.id
+  from_port         = 80
+  to_port           = 80
   ip_protocol       = "tcp"
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "backend_https_traffic_out" {
+  security_group_id = aws_security_group.backend_sg.id
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  cidr_ipv4         = "0.0.0.0/0"
 }
 
 ### backend db sec group ###
@@ -213,12 +253,36 @@ resource "aws_vpc_security_group_ingress_rule" "backend_db_from_frontend" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "backend_db_from_frontend_ssh" {
+  security_group_id            = aws_security_group.backend_db_sg.id
+  referenced_security_group_id = aws_security_group.frontend_sg.id
+  from_port                    = 22
+  to_port                      = 22
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "backend_db_from_backend" {
   security_group_id            = aws_security_group.backend_db_sg.id
   referenced_security_group_id = aws_security_group.backend_sg.id
   from_port                    = 5432
   to_port                      = 5432
   ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "backend_db_http_traffic_out" {
+  security_group_id = aws_security_group.backend_db_sg.id
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "backend_db_https_traffic_out" {
+  security_group_id = aws_security_group.backend_db_sg.id
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+  cidr_ipv4         = "0.0.0.0/0"
 }
 
 
@@ -254,4 +318,34 @@ module "db" {
   backend_security_group_id = [aws_security_group.backend_db_sg.id]
   key_name                  = var.key_name
   student_name              = var.student_name
+}
+
+##### creating the ansible inventory file ####/
+
+resource "local_file" "ansible_inventory" {
+  filename = "${path.module}/../ansible/inventory.ini"
+
+
+  content = <<EOF
+[frontend]
+${module.frontend.frontend.hostname} ansible_host=${module.frontend.frontend.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=~/floriksep26.pem
+
+[backend]
+${module.backend.hostname} private_ip=${module.backend.private_ip_backend}
+
+[db]
+${module.db.hostname} private_ip=${module.db.private_ip_db}
+
+EOF
+}
+
+resource "local_file" "ssh_config" {
+  content = templatefile("${path.module}/ssh_config_template", {
+    frontend_public_ip = module.frontend.frontend.public_ip
+    backend_private_ip = module.backend.private_ip_backend
+    db_private_ip      = module.db.private_ip_db
+  })
+
+  filename        = pathexpand("~/.ssh/florik_config")
+  file_permission = "0600"
 }

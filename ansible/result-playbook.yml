@@ -1,0 +1,30 @@
+---
+- name: Result App Setup 
+  hosts: frontend
+  become: true
+  tasks: 
+    - name: Update apt package index
+      ansible.builtin.apt:
+        update_cache: yes
+    
+    - name: Install Docker if not present
+      ansible.builtin.package:
+        name: docker.io
+        state: present
+
+    - name: Pull Docker Image
+      docker_image:
+        name: neonluft/result-app
+        source: pull
+        tag: latest
+
+    - name: Run Container
+      docker_container:
+        name: result-app
+        image: neonluft/result-app:latest # Change!
+        ports:
+        - "8081:80" # port mappings
+        state: started
+        env: 
+          PG_HOST : "{{ hostvars['florik-backend-db'].private_ip }}"
+ 
